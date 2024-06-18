@@ -1,0 +1,13 @@
+[package]
+name = "better-one-tab-2024-server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = "0.7.5"
+http = "1.1.0"
+serde = { version = "1.0.203", features = ["derive"] }
+tokio = { version = "1.38.0", features = ["rt", "rt-multi-thread", "macros"] }
+tracing-subscriber = "0.3.18"
+rand = "0.9.0-alpha.1"
+tower-http = { version = "0.5.2", features = ["cors"] }
