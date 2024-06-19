@@ -57,7 +57,27 @@ pub fn save_token_to_file(filename: String, token: String) -> Result<(), std::io
     Ok(())
 }
 
-pub fn try_get_username_token(username: String, token: String) -> bool {
+pub fn save_tabs_to_file(filename: String, tabs: String) -> Result<(), std::io::Error> {
+    let mut file = File::create(filename)?;
+    file.write_all(tabs.as_bytes())?;
+    Ok(())
+}
+
+pub fn get_tabs_from_file(filename: String) -> Result<String, std::io::Error> {
+    let file = File::open(filename);
+    match file {
+        Ok(mut f) => {
+            let mut contents = String::new();
+            f.read_to_string(&mut contents)?;
+            return Ok(contents);
+        }
+        Err(e) => {
+            return Err(e);
+        }
+    }
+}
+
+pub fn try_get_username_token(username: &String, token: String) -> bool {
     let filename = format!("{}.txt", username);
     let file = File::open(filename);
     match file {

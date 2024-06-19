@@ -2,6 +2,7 @@ mod util;
 
 use std::collections::HashMap;
 use std::env::args;
+use std::ptr::null;
 use axum::{
     routing::{get, post},
     http::StatusCode,
@@ -11,10 +12,12 @@ use axum::extract::{Path, Query};
 use serde::{Deserialize, Serialize};
 use tower_http::cors::{Any, CorsLayer};
 use crate::models::user::User;
-use crate::util::{generate_random_string, read_lines_from_file, save_token_to_file, try_get_username_token};
+use crate::models::tabs::{TabGroup, Tabs};
+use crate::util::{generate_random_string, get_tabs_from_file, read_lines_from_file, save_tabs_to_file, save_token_to_file, try_get_username_token};
 
 mod models {
     pub mod user; // 引入 greet_world 模块
+    pub mod tabs; // 引入 greet_world 模块
 }
 
 #[tokio::main]
@@ -46,6 +49,8 @@ async fn main() {
         .route("/users", post(create_user))
         .route("/api/verify", post(verify_user))
         .route("/api/user/:username", get(get_user_info))
+        .route("/api/user/:username/tabs", post(update_tabs))
+        .route("/api/user/:username/tabs", get(get_tabs))
         .layer(cors)
         ;
 
@@ -107,14 +112,66 @@ async fn verify_user(
     (StatusCode::UNAUTHORIZED, Json("Not found token".to_string()))
 }
 
+async fn update_tabs(
+    Path(username): Path<String>, Json(payload): Json<Tabs>
+) -> (StatusCode, Json<String>) {
+    let tabs = payload.tabs;
+    let token = payload.token;
+    let check_token = try_get_username_token(&username, token.to_string());
+    if !check_token {
+        return (StatusCode::UNAUTHORIZED, Json("Not found token".to_string()));
+    }
+
+    let json_str = serde_json::to_string(&tabs).unwrap();
+    let filename = format!("{}.json", username);
+    return match save_tabs_to_file(filename, json_str) {
+        Ok(()) => {
+            (StatusCode::OK, Json("OK".to_string()))
+        }
+        Err(e) => {
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(format!("Error saving file: {}", e)))
+        }
+    }
+}
+
 async fn get_user_info(Path(username): Path<String>, Query(params): Query<HashMap<String, String>>) -> (StatusCode, Json<String>) {
     let token = params.get("token").unwrap();
-    let result = try_get_username_token(username, token.to_string());
+    let result = try_get_username_token(&username, token.to_string());
     if result {
         return (StatusCode::OK, Json("OK".to_string()));
     }
 
     (StatusCode::UNAUTHORIZED, Json("Not found token".to_string()))
+}
+
+
+async fn get_tabs(Path(username): Path<String>, Query(params): Query<HashMap<String, String>>) -> (StatusCode, Json<Tabs>) {
+    let token = params.get("token").unwrap();
+    let result = try_get_username_token(&username, token.to_string());
+    if result {
+        let filename = format!("{}.json", username);
+        return match get_tabs_from_file(filename) {
+            Ok(tabs) => {
+                println!("tabs: {}", tabs);
+                let tabs: Vec<TabGroup> = serde_json::from_str(&tabs).unwrap();                
+                (StatusCode::OK, Json(Tabs {
+                    tabs: tabs,
+                    token: "".to_string()
+                }))
+            }
+            Err(e) => {
+                (StatusCode::INTERNAL_SERVER_ERROR , Json(Tabs {
+                    tabs: Vec::new(),
+                    token: "".to_string()
+                }))
+            }
+        }
+    }
+
+    (StatusCode::UNAUTHORIZED, Json(Tabs {
+        tabs: Vec::new(),
+        token: "".to_string()
+    }))
 }
 
 // the input to our `create_user` handler
