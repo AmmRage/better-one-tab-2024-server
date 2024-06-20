@@ -17,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build
-        run: cargo build --verbos
+        run: cargo build
       - name: Install zip
         uses: montudor/action-zip@v1
       - name: Compress Published Files
