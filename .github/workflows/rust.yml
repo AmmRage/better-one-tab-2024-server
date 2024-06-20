@@ -1,0 +1,30 @@
+name: Rust
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: cargo build --verbos
+      - name: Install zip
+        uses: montudor/action-zip@v1
+      - name: Compress Published Files
+        shell: sh
+        run: zip -qq -r ./better-one-tab-2024-server/publish_output.zip ./better-one-tab-2024-server/target/debug
+
+      - name: publish
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ./better-one-tab-2024-server/publish_output.zip
