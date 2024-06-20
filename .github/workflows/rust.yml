@@ -22,7 +22,7 @@ jobs:
         uses: montudor/action-zip@v1
       - name: Compress Published Files
         shell: sh
-        run: pwd && zip -qq -r ./better-one-tab-2024-server/publish_output.zip . -i ./better-one-tab-2024-server/target/debug
+        run: pwd && ls && zip -qq -r ./publish_output.zip . -i ./target/debug
 
       - name: publish
         uses: softprops/action-gh-release@v1
