@@ -26,4 +26,4 @@ jobs:
       - name: publish
         uses: softprops/action-gh-release@v1
         with:
-          files: ./better-one-tab-2024-server/publish_output.zip
+          files: ./publish_output.zip
