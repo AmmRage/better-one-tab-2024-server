@@ -9,6 +9,7 @@ pub struct Tabs {
 pub struct TabGroup {
     #[serde(rename = "_id")]
     pub id: String,
+    pub uuid: String,
     pub color: String,
     pub expand: bool,
     pub pinned: bool,
@@ -23,6 +24,7 @@ pub struct TabGroup {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Tab {
+    pub uuid : String,
     pub favIconUrl: String,
     pub muted: Option<bool>,
     pub pinned: bool,
