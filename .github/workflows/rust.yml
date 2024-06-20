@@ -22,7 +22,7 @@ jobs:
         uses: montudor/action-zip@v1
       - name: Compress Published Files
         shell: sh
-        run: pwd && ls && zip -qq -r ./publish_output.zip . -i ./target/debug
+        run: ls && zip -qq -r ./publish_output.zip . -i ./target/debug && ls
 
       - name: publish
         uses: softprops/action-gh-release@v1
