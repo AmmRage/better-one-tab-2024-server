@@ -13,11 +13,13 @@ use serde::{Deserialize, Serialize};
 use tower_http::cors::{Any, CorsLayer};
 use crate::models::user::User;
 use crate::models::tabs::{TabGroup, Tabs};
+use crate::models::update_response::update_response;
 use crate::util::{generate_random_string, get_tabs_from_file, read_lines_from_file, save_tabs_to_file, save_token_to_file, try_get_username_token};
 
 mod models {
     pub mod user; // 引入 greet_world 模块
     pub mod tabs; // 引入 greet_world 模块
+    pub mod update_response;
 }
 
 #[tokio::main]
@@ -114,22 +116,31 @@ async fn verify_user(
 
 async fn update_tabs(
     Path(username): Path<String>, Json(payload): Json<Tabs>
-) -> (StatusCode, Json<String>) {
+) -> (StatusCode, Json<update_response>) {
     let tabs = payload.tabs;
     let token = payload.token;
     let check_token = try_get_username_token(&username, token.to_string());
     if !check_token {
-        return (StatusCode::UNAUTHORIZED, Json("Not found token".to_string()));
+        return (StatusCode::UNAUTHORIZED, Json(update_response {
+            message: "Not found token".to_string(),
+            updated_at: chrono::Utc::now()
+        }));
     }
 
     let json_str = serde_json::to_string(&tabs).unwrap();
     let filename = format!("{}.json", username);
-    return match save_tabs_to_file(filename, json_str) {
+    return match save_tabs_to_file(filename.clone(), json_str) {
         Ok(()) => {
-            (StatusCode::OK, Json("OK".to_string()))
+            (StatusCode::OK, Json(update_response {
+                message: "OK".to_string(),
+                updated_at: chrono::Utc::now()
+            }))
         }
         Err(e) => {
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(format!("Error saving file: {}", e)))
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(update_response {
+                message: format!("Error saving file {}: {}", filename, e),
+                updated_at: chrono::Utc::now()
+            }))
         }
     }
 }
@@ -152,7 +163,7 @@ async fn get_tabs(Path(username): Path<String>, Query(params): Query<HashMap<Str
         let filename = format!("{}.json", username);
         return match get_tabs_from_file(filename) {
             Ok(tabs) => {
-                println!("tabs: {}", tabs);
+                // println!("tabs: {}", tabs);
                 let tabs: Vec<TabGroup> = serde_json::from_str(&tabs).unwrap();                
                 (StatusCode::OK, Json(Tabs {
                     tabs: tabs,
