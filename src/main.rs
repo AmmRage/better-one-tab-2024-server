@@ -1,20 +1,27 @@
-mod util;
+#[macro_use]
+extern crate lazy_static;
 
 use std::collections::HashMap;
 use std::env::args;
-use std::ptr::null;
+
 use axum::{
-    routing::{get, post},
     http::StatusCode,
-    Json, Router,
+    Json,
+    Router, routing::{get, post},
 };
 use axum::extract::{Path, Query};
 use serde::{Deserialize, Serialize};
 use tower_http::cors::{Any, CorsLayer};
-use crate::models::user::User;
+
+use crate::config::Config;
 use crate::models::tabs::{TabGroup, Tabs};
 use crate::models::update_response::update_response;
+use crate::models::user::User;
 use crate::util::{generate_random_string, get_tabs_from_file, read_lines_from_file, save_tabs_to_file, save_token_to_file, try_get_username_token};
+
+mod util;
+mod logger;
+mod config;
 
 mod models {
     pub mod user; // 引入 greet_world 模块
@@ -22,13 +29,31 @@ mod models {
     pub mod update_response;
 }
 
+
+
 #[tokio::main]
 async fn main() {
     let params: Vec<String> = args().collect();
     if params.len() < 2 {
         println!("Usage: {} <port>", params[0]);
+        println!("data directory should be created in the current directory");
         return;        
-    }    
+    }
+
+    // check data directory
+    let current_dir = std::env::current_dir().unwrap();
+    println!("Current directory: {:?}", current_dir);
+    let data_dir = current_dir.join("data");
+    if !data_dir.exists() {
+        println!("Create data directory: {:?} and users.txt", data_dir);
+        return;
+    }
+    // check history directory
+    let history_dir = data_dir.join("history");
+    if !history_dir.exists() {
+        std::fs::create_dir(history_dir.clone()).unwrap();
+        println!("Create history directory: {:?}", history_dir);
+    }
     
     let port = params[1].parse::<u16>().unwrap();
     println!("Listening on port {}", port);
