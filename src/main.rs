@@ -3,25 +3,31 @@ extern crate lazy_static;
 
 use std::collections::HashMap;
 use std::env::args;
+use std::net::SocketAddr;
+use std::sync::Mutex;
 
 use axum::{
     http::StatusCode,
     Json,
     Router, routing::{get, post},
+    response::Response,
 };
-use axum::extract::{Path, Query};
+use axum::extract::{ConnectInfo, FromRequest, Path, Query, Request};
+use axum::middleware::Next;
 use serde::{Deserialize, Serialize};
 use tower_http::cors::{Any, CorsLayer};
 
 use crate::config::Config;
+use crate::ip::Ips;
 use crate::models::tabs::{TabGroup, Tabs};
 use crate::models::update_response::update_response;
 use crate::models::user::User;
-use crate::util::{generate_random_string, get_tabs_from_file, read_lines_from_file, save_tabs_to_file, save_token_to_file, try_get_username_token};
+use crate::util::{generate_random_string, get_tabs_from_file, read_lines_from_file, remove_user_token, save_tabs_to_file, save_token_to_file, try_get_username_token};
 
 mod util;
 mod logger;
 mod config;
+mod ip;
 
 mod models {
     pub mod user; // 引入 greet_world 模块
@@ -29,7 +35,10 @@ mod models {
     pub mod update_response;
 }
 
-
+lazy_static! {
+    pub static ref IPS_INSTANCE: Mutex<Ips> = Mutex::new(Ips::new());
+    pub static ref CONFIG_INSTANCE: Mutex<Config> = Mutex::new(Config::new());
+}
 
 #[tokio::main]
 async fn main() {
@@ -67,24 +76,74 @@ async fn main() {
         .allow_headers(Any)
     ;
 
+
+
+    let middle_ware = axum::middleware::from_fn (my_middleware);
+
+
     // build our application with a route
     let app = Router::new()
         // `GET /` goes to `root`
         .route("/", get(root))
         .route("/api/", get(root))
         // `POST /users` goes to `create_user`
-        .route("/users", post(create_user))
-        .route("/api/verify", post(verify_user))
+        .route("/users", post(create_user).options(options_handler))
+        .route("/api/verify", post(verify_user).options(options_handler))
+        .route("/api/user/:username/logout", post(logout_user).options(options_handler))
         .route("/api/user/:username", get(get_user_info))
-        .route("/api/user/:username/tabs", post(update_tabs))
+        .route("/api/user/:username/tabs", post(update_tabs).options(options_handler))
         .route("/api/user/:username/tabs", get(get_tabs))
+        .layer(middle_ware)
         .layer(cors)
         ;
 
 
     // run our app with hyper, listening globally on port 3000
-    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port)).await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    match tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port)).await {
+        Ok(listener) => {
+            match axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await {
+                Ok(_) => {
+                    println!("Server started");
+                }
+                Err(e) => {
+                    println!("Error: {}", e);
+                }
+            }
+        }
+        Err(e) => {
+            println!("Error: {}", e);
+        }
+    }
+}
+
+async fn my_middleware(
+    ConnectInfo(socket_addr): ConnectInfo<SocketAddr>,
+    request: Request,
+    next: Next,
+) -> Response {
+    {
+        let settings = &(CONFIG_INSTANCE.lock().unwrap().settings);
+        if settings.enable_region_block == true {
+            let ip_str = socket_addr.ip().to_string();
+            let ip_parts: Vec<&str> = ip_str.split(".").collect();
+            let ip_u32 = ip_parts[0].parse::<u32>().unwrap() * 256 * 256 * 256 + ip_parts[1].parse::<u32>().unwrap() * 256 * 256 + ip_parts[2].parse::<u32>().unwrap() * 256 + ip_parts[3].parse::<u32>().unwrap();
+
+            let region_code = IPS_INSTANCE.lock().unwrap().get_region(ip_u32);
+            println!("{} - {} {} {}", socket_addr, request.method(), request.uri().path(), region_code);
+
+            if !settings.contains_region(&region_code) {
+                let forbidden_message = format!("Forbidden region: {}", region_code);
+                let forbidden_response = Response::builder()
+                    .status(StatusCode::FORBIDDEN)
+                    .body(axum::body::Body::from(forbidden_message))
+                    .unwrap();
+                return forbidden_response;
+            }
+        }
+    }
+
+    let response = next.run(request).await;
+    response
 }
 
 // basic handler that responds with a static string
@@ -124,6 +183,10 @@ async fn verify_user(
         }
     }
 
+    if users.len() == 0 {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json("No users".to_string()));
+    }
+
     if error_message != "OK" {
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(error_message.to_string()));
     }
@@ -134,6 +197,18 @@ async fn verify_user(
             save_token_to_file(format!("{}.txt", user.username), token.clone()).unwrap();
             return (StatusCode::OK, Json(token));
         }
+    }
+
+    (StatusCode::UNAUTHORIZED, Json("Incorrect username or password".to_string()))
+}
+
+async fn logout_user(
+    Path(username): Path<String>, Json(payload): Json<String>,
+) -> (StatusCode, Json<String>) {
+    let result = try_get_username_token(&username, payload.to_string());
+    if result {
+        let _ = remove_user_token(&username);
+        return (StatusCode::OK, Json("OK".to_string()));
     }
 
     (StatusCode::UNAUTHORIZED, Json("Not found token".to_string()))
@@ -154,7 +229,7 @@ async fn update_tabs(
 
     let json_str = serde_json::to_string(&tabs).unwrap();
     let filename = format!("{}.json", username);
-    return match save_tabs_to_file(filename.clone(), json_str) {
+    return match save_tabs_to_file(&filename, json_str) {
         Ok(()) => {
             (StatusCode::OK, Json(update_response {
                 message: "OK".to_string(),
@@ -178,6 +253,15 @@ async fn get_user_info(Path(username): Path<String>, Query(params): Query<HashMa
     }
 
     (StatusCode::UNAUTHORIZED, Json("Not found token".to_string()))
+}
+
+async fn options_handler() -> Response {
+    Response::builder()
+        .header("Access-Control-Allow-Origin", "*")
+        .header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        .header("Access-Control-Allow-Headers", "Content-Type")
+        .body(axum::body::Body::empty())
+        .unwrap()
 }
 
 
