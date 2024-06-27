@@ -11,6 +11,7 @@ use axum::{
     Json,
     Router, routing::{get, post},
     response::Response,
+    http::HeaderMap,
 };
 use axum::extract::{ConnectInfo, FromRequest, Path, Query, Request};
 use axum::middleware::Next;
@@ -118,13 +119,21 @@ async fn main() {
 
 async fn my_middleware(
     ConnectInfo(socket_addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
     request: Request,
     next: Next,
 ) -> Response {
     {
         let settings = &(CONFIG_INSTANCE.lock().unwrap().settings);
         if settings.enable_region_block == true {
-            let ip_str = socket_addr.ip().to_string();
+            let ip_str = headers
+                .get("x-forwarded-for")
+                .and_then(|value| value.to_str().ok())
+                .unwrap_or("127.0.0.1");
+
+            // println!("Client IP: {}", client_ip);
+            // let ip_str = socket_addr.ip().to_string();            // println!("Client IP: {}", client_ip);
+            // let ip_str = socket_addr.ip().to_string();
             let ip_parts: Vec<&str> = ip_str.split(".").collect();
             let ip_u32 = ip_parts[0].parse::<u32>().unwrap() * 256 * 256 * 256 + ip_parts[1].parse::<u32>().unwrap() * 256 * 256 + ip_parts[2].parse::<u32>().unwrap() * 256 + ip_parts[3].parse::<u32>().unwrap();
 
