@@ -1,7 +1,7 @@
 use serde::{Serialize, Deserialize};
 use std::fs;
 use std::sync::Mutex;
-
+use log::{error, info};
 
 pub struct Ip  {
     pub low: u32,
@@ -18,6 +18,7 @@ impl Ips{
         let contents = match fs::read_to_string("./config/dbip-country-ipv4-num.csv"){
             Ok(value) => value,
             Err(_) => {
+                error!("Failed to read ip list file");
                 return Self {
                     ip_list: Vec::new()
                 }
@@ -36,6 +37,7 @@ impl Ips{
                 region: String::from(parts[2]),
             });
         }
+        info!("Loaded {} ip regions", ip_list.len());
         Self {
             ip_list
         }

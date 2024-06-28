@@ -41,7 +41,7 @@ pub fn setup_logger() -> Result<Handle, Box<dyn std::error::Error>> {
     {
         let log_file_path = &format!("logs/{}/debug.app.log", date);
         // 配置日志滚动策略
-        let size_trigger = SizeTrigger::new(10 * 1024); // 10KB
+        let size_trigger = SizeTrigger::new(10 * 1024 * 1024); // 10MB
         let size_roller = FixedWindowRoller::builder()
             .build(&format!("logs/{}/debug.app.rotate.{{}}.log", date), 30)?;
         let size_trigger_policy = CompoundPolicy::new(Box::new(size_trigger), Box::new(size_roller));
