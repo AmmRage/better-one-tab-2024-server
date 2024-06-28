@@ -15,7 +15,7 @@ pub struct Ips {
 
 impl Ips{
     pub fn new() -> Self {
-        let contents = match fs::read_to_string("dbip-country-ipv4-num.csv"){
+        let contents = match fs::read_to_string("./config/dbip-country-ipv4-num.csv"){
             Ok(value) => value,
             Err(_) => {
                 return Self {
