@@ -7,17 +7,17 @@ use std::net::SocketAddr;
 use std::sync::Mutex;
 
 use axum::{
-    http::StatusCode,
-    Json,
-    Router, routing::{get, post},
-    response::Response,
     http::HeaderMap,
+    http::StatusCode,
+    Json, response::Response,
+    Router,
+    routing::{get, post},
 };
-use axum::extract::{ConnectInfo, FromRequest, Path, Query, Request};
+use axum::extract::{ConnectInfo, Path, Query, Request};
 use axum::middleware::Next;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize};
 use tower_http::cors::{Any, CorsLayer};
-
+use log::{debug, error, info, trace, warn};
 use crate::config::Config;
 use crate::ip::Ips;
 use crate::models::tabs::{TabGroup, Tabs};
@@ -43,10 +43,15 @@ lazy_static! {
 
 #[tokio::main]
 async fn main() {
+    // log4rs::init_file("config/log4rs.yaml", Default::default()).unwrap();
+    logger::setup_logger().unwrap();
+    info!("Starting server... at {}", chrono::Utc::now());
     let params: Vec<String> = args().collect();
     if params.len() < 2 {
         println!("Usage: {} <port>", params[0]);
         println!("data directory should be created in the current directory");
+
+        error!("Error: missing port number");
         return;        
     }
 
@@ -56,6 +61,7 @@ async fn main() {
     let data_dir = current_dir.join("data");
     if !data_dir.exists() {
         println!("Create data directory: {:?} and users.txt", data_dir);
+        error!("Error: missing data directory");
         return;
     }
     // check history directory
@@ -63,32 +69,24 @@ async fn main() {
     if !history_dir.exists() {
         std::fs::create_dir(history_dir.clone()).unwrap();
         println!("Create history directory: {:?}", history_dir);
+        warn!("Warning: missing history directory and created");
     }
     
     let port = params[1].parse::<u16>().unwrap();
     println!("Listening on port {}", port);
+    info!("Listening on port {}", port);
     
-    // initialize tracing
-    tracing_subscriber::fmt::init();
-
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods(Any)
         .allow_headers(Any)
     ;
-
-
-
-    let middle_ware = axum::middleware::from_fn (my_middleware);
-
-
+    let middle_ware = axum::middleware::from_fn (ip_filter_middleware);
     // build our application with a route
     let app = Router::new()
         // `GET /` goes to `root`
         .route("/", get(root))
         .route("/api/", get(root))
-        // `POST /users` goes to `create_user`
-        .route("/users", post(create_user).options(options_handler))
         .route("/api/verify", post(verify_user).options(options_handler))
         .route("/api/user/:username/logout", post(logout_user).options(options_handler))
         .route("/api/user/:username", get(get_user_info))
@@ -98,49 +96,63 @@ async fn main() {
         .layer(cors)
         ;
 
-
     // run our app with hyper, listening globally on port 3000
     match tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port)).await {
         Ok(listener) => {
             match axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await {
                 Ok(_) => {
                     println!("Server started");
+                    info!("Web server started");
                 }
                 Err(e) => {
                     println!("Error: {}", e);
+                    error!("Error: {}", e);
                 }
             }
         }
         Err(e) => {
             println!("Error: {}", e);
+            error!("Error: {}", e);
         }
     }
 }
 
-async fn my_middleware(
+async fn ip_filter_middleware(
     ConnectInfo(socket_addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     request: Request,
     next: Next,
 ) -> Response {
     {
+        info!("{} - {} {}, headers: {:?}", socket_addr, request.method(), request.uri().path(), headers);
+
         let settings = &(CONFIG_INSTANCE.lock().unwrap().settings);
         if settings.enable_region_block == true {
+            let all_headers = headers.clone();
+            for (name, value) in all_headers.iter() {
+                if name.as_str().contains("agent") {
+                    continue;
+                }
+                debug!("{}: {}", name, value.to_str().unwrap_or("header no value"));
+            }
+            
             let ip_str = headers
                 .get("x-forwarded-for")
                 .and_then(|value| value.to_str().ok())
                 .unwrap_or("127.0.0.1");
 
-            // println!("Client IP: {}", client_ip);
-            // let ip_str = socket_addr.ip().to_string();            // println!("Client IP: {}", client_ip);
-            // let ip_str = socket_addr.ip().to_string();
+            debug!("ip: {}", ip_str);
+
             let ip_parts: Vec<&str> = ip_str.split(".").collect();
             let ip_u32 = ip_parts[0].parse::<u32>().unwrap() * 256 * 256 * 256 + ip_parts[1].parse::<u32>().unwrap() * 256 * 256 + ip_parts[2].parse::<u32>().unwrap() * 256 + ip_parts[3].parse::<u32>().unwrap();
 
+            debug!("ip_u32: {}", ip_u32);
+
             let region_code = IPS_INSTANCE.lock().unwrap().get_region(ip_u32);
-            println!("{} - {} {} {}", socket_addr, request.method(), request.uri().path(), region_code);
+            debug!("{} - {} {} {}", ip_str, request.method(), request.uri().path(), region_code);
 
             if !settings.contains_region(&region_code) {
+                info!("Forbidden ip  {} - {} {} {}", ip_str, request.method(), request.uri().path(), region_code);
                 let forbidden_message = format!("Forbidden region: {}", region_code);
                 let forbidden_response = Response::builder()
                     .status(StatusCode::FORBIDDEN)
@@ -148,6 +160,7 @@ async fn my_middleware(
                     .unwrap();
                 return forbidden_response;
             }
+            info!("Allowed ip  {} - {} {} {}", ip_str, request.method(), request.uri().path(), region_code);
         }
     }
 
@@ -157,24 +170,8 @@ async fn my_middleware(
 
 // basic handler that responds with a static string
 async fn root() -> (StatusCode, Json<String>) {
-    let message = format!("version: {}", env!("CARGO_PKG_VERSION"));
+    let message = format!("version: {}, {}", env!("CARGO_PKG_VERSION"), chrono::Local::now().format("%Y-%m-%d %H:%M:%S"));
     (StatusCode::OK, Json(message))
-}
-
-async fn create_user(
-    // this argument tells axum to parse the request body
-    // as JSON into a `CreateUser` type
-    Json(payload): Json<CreateUser>,
-) -> (StatusCode, Json<User>) {
-    // insert your application logic here
-    let user = User {
-        username: payload.username,
-        password: "password".to_string(),
-    };
-
-    // this will be converted into a JSON response
-    // with a status code of `201 Created`
-    (StatusCode::CREATED, Json(user))
 }
 
 async fn verify_user(
@@ -301,11 +298,5 @@ async fn get_tabs(Path(username): Path<String>, Query(params): Query<HashMap<Str
         tabs: Vec::new(),
         token: "".to_string()
     }))
-}
-
-// the input to our `create_user` handler
-#[derive(Deserialize)]
-struct CreateUser {
-    username: String,
 }
 

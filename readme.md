@@ -12,7 +12,7 @@ simple server to serve the one tab extension sync data api
 
 ### Config
 
-file name: `appsettings.json`
+#### Application file name: `appsettings.json`
 
 * rotate_type: value must be one of `history_count`, `stored_time` or `total_size`
 * rotate_count: integer, how many you want to keep
@@ -34,6 +34,12 @@ file name: `appsettings.json`
 }
 ```
 
+#### Logging file name: `log4rs.yaml`
+
+**NOTICE:** actually this config file for log4rs no in use
+
+for details, please refer to [log4rs@github](https://github.com/estk/log4rs) and [log4rs@docs.rs](https://docs.rs/log4rs/latest/log4rs/)
+
 ### Deploy with executable
 
 eg: bind with port 9401
@@ -51,13 +57,14 @@ sudo docker run -it -d \
 --name tabs \
 -v /home/ubuntu/tabs/data:/app/data \
 -v /home/ubuntu/tabs:/app/config \
+-v /home/ubuntu/tabs/logs:/app/logs \
 -p 9401:9401 \
 ammrage/tabs-server:latest
 ```
 
 ## To do
 
-- [ ] add logging
+- [x] add logging
 - [ ] add storage abstraction layer
 - [ ] add database (mongodb/redis/postgresql) support option
 - [ ] add docker compose file
