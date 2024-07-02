@@ -10,13 +10,25 @@ appenders:
   file:
     kind: file
     append: true
-    path: "log/file-{%Y-%m-%d_%H-%M-%S}.log"
+    path: "logs/file-{%Y-%m-%d_%H-%M-%S}.log"
     encoder:
       pattern: "[{d(%Y-%m-%dT%H:%M:%S%.6f)} {h({l}):<5.5} {M}] {m}{n}"
+  step_ap:
+    kind: rolling_file
+    path: logs/step.log
+    policy:
+      trigger:
+        kind: size
+        limit: 10 kb
+      roller:
+        kind: fixed_window
+        pattern: logs/step/step_{}.log
+        count: 5
+        base: 1
   rollingfile:
     kind: rolling_file
     append: true
-    path: "log/rolling_file.log"
+    path: "logs/rolling_file.log"
     encoder:
       pattern: "{d(%Y-%m-%dT%H:%M:%S%.6f)} {h({l}):<5.5} {m}{n}"
     policy:
@@ -25,12 +37,11 @@ appenders:
         interval: 1 minute
       roller:
         kind: fixed_window
-        pattern: "log/old-rolling_file-{}.log"
+        pattern: "logs/old-rolling_file-{}.log"
         base: 0
         count: 20
 root:
   level: info
   appenders:
     - stdout
-    - file
-    - rollingfile
+    - step_ap

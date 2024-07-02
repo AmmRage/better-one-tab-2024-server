@@ -35,21 +35,20 @@ impl Filter for PassThroughFilter {
 
 pub fn setup_logger() -> Result<Handle, Box<dyn std::error::Error>> {
     // 获取当前日期
-    let date = Local::now().format("%Y-%m-%d").to_string();
+
     let mut config_builder = log4rs::config::runtime::ConfigBuilder::default();
     // trace, debug
     {
-        let log_file_path = &format!("logs/{}/debug.app.log", date);
         // 配置日志滚动策略
-        let size_trigger = SizeTrigger::new(10 * 1024 * 1024); // 10MB
+        let size_trigger = SizeTrigger::new(10 * 1024); // 10MB
         let size_roller = FixedWindowRoller::builder()
-            .build(&format!("logs/{}/debug.app.rotate.{{}}.log", date), 30)?;
+            .build(&format!("logs/{}/debug.app.rotate.{{}}.log", Local::now().format("%Y-%m-%d").to_string()), 30)?;
         let size_trigger_policy = CompoundPolicy::new(Box::new(size_trigger), Box::new(size_roller));
         // 配置日志附加器
         let size_rolled_appender = RollingFileAppender::builder()
             .append(true)
             .encoder(Box::new(PatternEncoder::new("{d}, {l}, {m}{n}")))
-            .build(log_file_path, Box::new(size_trigger_policy))?;
+            .build(&format!("logs/{}/debug.app.log", Local::now().format("%Y-%m-%d").to_string()), Box::new(size_trigger_policy))?;
         config_builder = config_builder.appender(
             Appender::builder()
                 .filter(
@@ -63,17 +62,16 @@ pub fn setup_logger() -> Result<Handle, Box<dyn std::error::Error>> {
 
     // info
     {
-        let log_file_path = &format!("logs/{}/info.app.log", date);
         // 配置日志滚动策略
         let size_trigger = SizeTrigger::new(10 * 1024); // 10KB
         let size_roller = FixedWindowRoller::builder()
-            .build(&format!("logs/{}/info.app.rotate.{{}}.log", date), 30)?;
+            .build(&format!("logs/{}/info.app.rotate.{{}}.log", Local::now().format("%Y-%m-%d").to_string()), 30)?;
         let size_trigger_policy = CompoundPolicy::new(Box::new(size_trigger), Box::new(size_roller));
         // 配置日志附加器
         let size_rolled_appender = RollingFileAppender::builder()
             .append(true)
             .encoder(Box::new(PatternEncoder::new("{d}, {l}, {m}{n}")))
-            .build(log_file_path, Box::new(size_trigger_policy))?;
+            .build(&format!("logs/{}/info.app.log", Local::now().format("%Y-%m-%d").to_string()), Box::new(size_trigger_policy))?;
         config_builder = config_builder.appender(
             Appender::builder()
                 .filter(
@@ -88,17 +86,16 @@ pub fn setup_logger() -> Result<Handle, Box<dyn std::error::Error>> {
 
     // warn, error
     {
-        let log_file_path = &format!("logs/{}/error.app.log", date);
         // 配置日志滚动策略
         let size_trigger = SizeTrigger::new(10 * 1024); // 10KB
         let size_roller = FixedWindowRoller::builder()
-            .build(&format!("logs/{}/error.app.rotate.{{}}.log", date), 30)?;
+            .build(&format!("logs/{}/error.app.rotate.{{}}.log", Local::now().format("%Y-%m-%d").to_string()), 30)?;
         let size_trigger_policy = CompoundPolicy::new(Box::new(size_trigger), Box::new(size_roller));
         // 配置日志附加器
         let size_rolled_appender = RollingFileAppender::builder()
             .append(true)
             .encoder(Box::new(PatternEncoder::new("{d}, {l}, {m}{n}")))
-            .build(log_file_path, Box::new(size_trigger_policy))?;
+            .build(&format!("logs/{}/error.app.log", Local::now().format("%Y-%m-%d").to_string()), Box::new(size_trigger_policy))?;
         config_builder = config_builder.appender(
             Appender::builder()
                 .filter(

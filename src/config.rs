@@ -1,6 +1,7 @@
 use serde::{Serialize, Deserialize};
-use std::fs;
+use std::{fmt, fs};
 use std::sync::Mutex;
+use log::{info, warn};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[derive(PartialEq)]
@@ -25,6 +26,17 @@ impl Clone for RotateType {
             RotateType::StoredTime => RotateType::StoredTime,
             RotateType::TotalSize => RotateType::TotalSize,
             RotateType::Reserved => RotateType::Reserved,
+        }
+    }
+}
+
+impl fmt::Display for RotateType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            RotateType::HistoryCount => write!(f, "Rotate history tag files by total count"),
+            RotateType::StoredTime => write!(f, "Rotate history tag files by its stored time"),
+            RotateType::TotalSize => write!(f, "Rotate history tag files by total size of history directory"),
+            RotateType::Reserved => write!(f, "Reserved field"),
         }
     }
 }
@@ -80,10 +92,27 @@ impl Clone for Settings {
     }
 }
 
+impl fmt::Display for Settings {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "History tabs file rotate strategy: {}\n \
+            Rotate count: {}\n \
+            Rotate time: {} days\n \
+            Rotate size: {} MB\n \
+            Enable region block: {}\n \
+            White region code list: {:?}",
+            self.rotate_type, self.rotate_count, self.rotate_time, self.rotate_size, self.enable_region_block, self.white_region_code_list)
+    }
+}
 
 #[derive(Deserialize)]
 pub struct Config {
     pub settings: Settings,
+}
+
+impl fmt::Display for Config {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.settings)
+    }
 }
 
 impl Config{
@@ -95,8 +124,12 @@ impl Config{
 
     pub fn new() -> Self {
         let config_string = match fs::read_to_string("./config/appsettings.json") {
-            Ok(value) => value,
+            Ok(value) => {
+                info!("Loaded appsettings.json");
+                value
+            },
             Err(_) => {
+                warn!("Failed to read appsettings.json, use default settings");
                 let default_config = Config {
                     settings: Settings::new(),
                 };
@@ -112,6 +145,7 @@ impl Config{
                 return default_config;
             }
         };
+        info!("Loaded config: {}", config);
         config
     }
 }

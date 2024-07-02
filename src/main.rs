@@ -13,11 +13,13 @@ use axum::{
     Router,
     routing::{get, post},
 };
+use axum::body::HttpBody;
 use axum::extract::{ConnectInfo, Path, Query, Request};
 use axum::middleware::Next;
 use serde::{Deserialize};
 use tower_http::cors::{Any, CorsLayer};
 use log::{debug, error, info, trace, warn};
+use uuid::Uuid;
 use crate::config::Config;
 use crate::ip::Ips;
 use crate::models::tabs::{TabGroup, Tabs};
@@ -43,7 +45,13 @@ lazy_static! {
 
 #[tokio::main]
 async fn main() {
-    // log4rs::init_file("config/log4rs.yaml", Default::default()).unwrap();
+    // match log4rs::init_file("./config/log4rs.yaml", Default::default()) {
+    //     Ok(x) => x,
+    //     Err(_) => {
+    //         println!("Failed to initialize log4rs");
+    //         return;
+    //     },
+    // };
     logger::setup_logger().unwrap();
     info!("Starting server... at {}", chrono::Utc::now());
     let params: Vec<String> = args().collect();
@@ -123,9 +131,10 @@ async fn ip_filter_middleware(
     request: Request,
     next: Next,
 ) -> Response {
+    let request_id = Uuid::new_v4();
     {
-        info!("{} - {} {}, headers: {:?}", socket_addr, request.method(), request.uri().path(), headers);
 
+        info!("{}, {}, {}, {}, headers: {:?}", socket_addr, request.method(), request.uri().path(), &request_id.to_string(), headers);
         let settings = &(CONFIG_INSTANCE.lock().unwrap().settings);
         if settings.enable_region_block == true {
             let all_headers = headers.clone();
@@ -165,6 +174,7 @@ async fn ip_filter_middleware(
     }
 
     let response = next.run(request).await;
+    info!("{}, status: {}", &request_id.to_string(), response.status());
     response
 }
 
@@ -214,7 +224,7 @@ async fn logout_user(
     let result = try_get_username_token(&username, payload.to_string());
     if result {
         let _ = remove_user_token(&username);
-        return (StatusCode::OK, Json("OK".to_string()));
+        return (StatusCode::OK, Json("Logout successfully".to_string()));
     }
 
     (StatusCode::UNAUTHORIZED, Json("Not found token".to_string()))
