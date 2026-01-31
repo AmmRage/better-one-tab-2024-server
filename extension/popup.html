@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Better One Tab</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <h1>Better One Tab</h1>
+      <div class="header-actions">
+        <button id="login-btn" class="btn btn-primary">登录</button>
+        <button id="upload-btn" class="btn btn-secondary" disabled>上传</button>
+        <button id="download-btn" class="btn btn-secondary" disabled>下载</button>
+      </div>
+    </header>
+
+    <!-- Login Modal -->
+    <div id="login-modal" class="modal hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>登录服务器</h2>
+          <button type="button" id="close-login-modal" class="modal-close-btn" aria-label="关闭">×</button>
+        </div>
+        <form id="login-form">
+          <div class="form-group">
+            <label for="server-url">服务器地址:</label>
+            <input type="text" id="server-url" placeholder="http://localhost:9401" required>
+          </div>
+          <div class="form-group">
+            <label for="username">用户名:</label>
+            <input type="text" id="username" required>
+          </div>
+          <div class="form-group">
+            <label for="password">密码:</label>
+            <input type="password" id="password" required>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">登录</button>
+            <button type="button" id="cancel-login" class="btn btn-secondary">取消</button>
+          </div>
+          <div id="login-error" class="error-message hidden"></div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Groups List -->
+    <div class="groups-container">
+      <div id="groups-list"></div>
+      <div id="empty-message" class="empty-message hidden">
+        <p>还没有保存任何标签</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="storage.js"></script>
+  <script src="api.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
