@@ -1,10 +1,12 @@
 // 弹窗主逻辑
 let isLoggedIn = false;
+let currentUsername = '';
 
 // DOM 元素
 const loginBtn = document.getElementById('login-btn');
 const uploadBtn = document.getElementById('upload-btn');
 const downloadBtn = document.getElementById('download-btn');
+const usernameDisplay = document.getElementById('username-display');
 const loginModal = document.getElementById('login-modal');
 const loginForm = document.getElementById('login-form');
 const cancelLoginBtn = document.getElementById('cancel-login');
@@ -22,8 +24,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // 设置事件监听
 function setupEventListeners() {
-  loginBtn.addEventListener('click', () => {
-    showLoginModal();
+  loginBtn.addEventListener('click', async () => {
+    if (isLoggedIn) {
+      await handleLogout();
+    } else {
+      showLoginModal();
+    }
   });
 
   cancelLoginBtn.addEventListener('click', () => {
@@ -63,10 +69,12 @@ async function checkLoginStatus() {
     const isValid = await API.verifyToken(config.serverUrl, config.username, config.token);
     if (isValid) {
       isLoggedIn = true;
+      currentUsername = config.username;
       updateLoginUI();
     } else {
       // token 无效，清除配置
       await Storage.saveServerConfig('', '', '');
+      currentUsername = '';
     }
   }
 }
@@ -74,11 +82,19 @@ async function checkLoginStatus() {
 // 更新登录 UI
 function updateLoginUI() {
   if (isLoggedIn) {
-    loginBtn.textContent = '已登录';
-    loginBtn.disabled = true;
+    // 显示用户名
+    usernameDisplay.textContent = currentUsername;
+    usernameDisplay.classList.remove('hidden');
+    // 登录按钮变成退出按钮
+    loginBtn.textContent = '退出';
+    loginBtn.disabled = false;
     uploadBtn.disabled = false;
     downloadBtn.disabled = false;
   } else {
+    // 隐藏用户名
+    usernameDisplay.classList.add('hidden');
+    usernameDisplay.textContent = '';
+    // 显示登录按钮
     loginBtn.textContent = '登录';
     loginBtn.disabled = false;
     uploadBtn.disabled = true;
@@ -115,10 +131,39 @@ async function handleLogin() {
   const result = await API.login(serverUrl, username, password);
   if (result.success) {
     isLoggedIn = true;
+    currentUsername = username;
     updateLoginUI();
     hideLoginModal();
   } else {
     showLoginError(result.error || '登录失败');
+  }
+}
+
+// 处理退出
+async function handleLogout() {
+  if (!confirm('确定要退出登录吗？')) {
+    return;
+  }
+
+  const config = await Storage.getServerConfig();
+  if (config.serverUrl && config.username && config.token) {
+    loginBtn.disabled = true;
+    loginBtn.textContent = '退出中...';
+
+    const result = await API.logout(config.serverUrl, config.username, config.token);
+    
+    // 无论服务器端是否成功，都清除本地配置
+    await Storage.saveServerConfig('', '', '');
+    isLoggedIn = false;
+    currentUsername = '';
+    updateLoginUI();
+
+    if (result.success) {
+      alert('退出成功');
+    } else {
+      // 即使服务器端失败，本地也已经清除，所以只提示
+      console.log('退出时服务器端错误:', result.error);
+    }
   }
 }
 

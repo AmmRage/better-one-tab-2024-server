@@ -57,6 +57,13 @@ async function saveAllGroups(groups) {
 
 // 保存当前标签
 async function saveCurrentTab(tab) {
+  // 先打开扩展页面
+  const extensionUrl = chrome.runtime.getURL('popup.html');
+  await chrome.tabs.create({
+    url: extensionUrl,
+    windowId: tab.windowId
+  });
+
   const tabs = [{
     uuid: generateId(),
     favIconUrl: tab.favIconUrl || '',
@@ -89,57 +96,20 @@ async function saveCurrentTab(tab) {
 
 // 保存当前窗口所有标签
 async function saveWindowTabs(windowId) {
-  const tabs = await chrome.tabs.query({ windowId: windowId });
-  const tabData = tabs.map(tab => ({
-    uuid: generateId(),
-    favIconUrl: tab.favIconUrl || '',
-    muted: tab.mutedInfo?.muted || false,
-    pinned: tab.pinned || false,
-    title: tab.title || '',
-    url: tab.url || ''
-  }));
-
-  const groups = await getAllGroups();
-  const group = {
-    _id: generateId(),
-    uuid: generateId(),
-    color: '#4285f4',
-    expand: false,
-    pinned: false,
-    tabs: tabData,
-    tags: [],
-    time: Date.now(),
-    title: new Date().toLocaleString('zh-CN'),
-    titleEditing: false,
-    updatedAt: Date.now()
-  };
-  groups.unshift(group);
-  await saveAllGroups(groups);
-
   // 先打开扩展页面
   const extensionUrl = chrome.runtime.getURL('popup.html');
-  const extensionTab = await chrome.tabs.create({
+  await chrome.tabs.create({
     url: extensionUrl,
     windowId: windowId
   });
 
-  // 关闭其他标签（排除扩展页面）
-  const tabIds = tabs
-    .filter(t => t.url !== extensionUrl)
-    .map(t => t.id);
-  
-  if (tabIds.length > 0) {
-    chrome.tabs.remove(tabIds);
-  }
-}
-
-// 保存所有窗口所有标签
-async function saveAllTabs() {
-  const tabs = await chrome.tabs.query({});
-  const extensionUrl = chrome.runtime.getURL('popup.html');
-  
+  const tabs = await chrome.tabs.query({ windowId: windowId });
   const tabData = tabs
-    .filter(t => t.url !== extensionUrl) // 排除已存在的扩展页面
+    .filter(t => {
+      // 排除扩展页面
+      const tabUrl = t.url || '';
+      return !tabUrl.startsWith('chrome-extension://');
+    })
     .map(tab => ({
       uuid: generateId(),
       favIconUrl: tab.favIconUrl || '',
@@ -166,7 +136,26 @@ async function saveAllTabs() {
   groups.unshift(group);
   await saveAllGroups(groups);
 
+  // 关闭其他标签（排除扩展页面）
+  // 重新查询以确保获取最新状态
+  const allTabs = await chrome.tabs.query({ windowId: windowId });
+  const tabIds = allTabs
+    .filter(t => {
+      // 跳过所有以 chrome-extension:// 开头的 URL
+      const tabUrl = t.url || '';
+      return !tabUrl.startsWith('chrome-extension://');
+    })
+    .map(t => t.id);
+  
+  if (tabIds.length > 0) {
+    chrome.tabs.remove(tabIds);
+  }
+}
+
+// 保存所有窗口所有标签
+async function saveAllTabs() {
   // 先打开扩展页面（在第一个窗口中）
+  const extensionUrl = chrome.runtime.getURL('popup.html');
   const windows = await chrome.windows.getAll();
   const firstWindowId = windows.length > 0 ? windows[0].id : null;
   
@@ -175,9 +164,48 @@ async function saveAllTabs() {
     windowId: firstWindowId
   });
 
+  const tabs = await chrome.tabs.query({});
+  const tabData = tabs
+    .filter(t => {
+      // 排除扩展页面
+      const tabUrl = t.url || '';
+      return !tabUrl.startsWith('chrome-extension://');
+    })
+    .map(tab => ({
+      uuid: generateId(),
+      favIconUrl: tab.favIconUrl || '',
+      muted: tab.mutedInfo?.muted || false,
+      pinned: tab.pinned || false,
+      title: tab.title || '',
+      url: tab.url || ''
+    }));
+
+  const groups = await getAllGroups();
+  const group = {
+    _id: generateId(),
+    uuid: generateId(),
+    color: '#4285f4',
+    expand: false,
+    pinned: false,
+    tabs: tabData,
+    tags: [],
+    time: Date.now(),
+    title: new Date().toLocaleString('zh-CN'),
+    titleEditing: false,
+    updatedAt: Date.now()
+  };
+  groups.unshift(group);
+  await saveAllGroups(groups);
+
   // 关闭所有其他标签（排除扩展页面）
-  const tabIds = tabs
-    .filter(t => t.url !== extensionUrl)
+  // 重新查询以确保获取最新状态
+  const allTabs = await chrome.tabs.query({});
+  const tabIds = allTabs
+    .filter(t => {
+      // 跳过所有以 chrome-extension:// 开头的 URL
+      const tabUrl = t.url || '';
+      return !tabUrl.startsWith('chrome-extension://');
+    })
     .map(t => t.id);
   
   if (tabIds.length > 0) {

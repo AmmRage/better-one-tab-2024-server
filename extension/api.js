@@ -90,5 +90,29 @@ const API = {
     } catch (error) {
       return false;
     }
+  },
+
+  // 退出登录
+  async logout(serverUrl, username, token) {
+    try {
+      // 确保 token 是纯字符串，去除可能的引号
+      const cleanToken = String(token).replace(/^["']|["']$/g, '').trim();
+      const response = await fetch(`${serverUrl}/api/user/${username}/logout`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(cleanToken)
+      });
+
+      if (response.ok) {
+        return { success: true };
+      } else {
+        const error = await response.text();
+        return { success: false, error };
+      }
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
   }
 };

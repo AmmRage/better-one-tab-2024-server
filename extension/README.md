@@ -1,4 +1,4 @@
-# Better One Tab 2024 扩展
+# Another One Tab 2026 2024 扩展
 
 Chrome 浏览器扩展，用于保存和管理浏览器标签，支持多设备同步。
 
