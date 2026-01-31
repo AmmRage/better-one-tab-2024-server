@@ -240,6 +240,145 @@ async function loadGroups() {
   });
 }
 
+// 在当前窗口打开所有链接
+async function openAllLinksInCurrentWindow() {
+  const groups = await Storage.getAllGroups();
+  const allUrls = [];
+  
+  groups.forEach(group => {
+    group.tabs.forEach(tab => {
+      if (tab.url && !tab.url.startsWith('chrome-extension://')) {
+        allUrls.push(tab.url);
+      }
+    });
+  });
+
+  if (allUrls.length === 0) {
+    alert('没有可打开的链接');
+    return;
+  }
+
+  // 获取当前窗口
+  const currentWindow = await chrome.windows.getCurrent();
+  
+  // 在当前窗口打开所有链接
+  for (const url of allUrls) {
+    await chrome.tabs.create({
+      url: url,
+      windowId: currentWindow.id
+    });
+  }
+}
+
+// 在新窗口打开所有链接
+async function openAllLinksInNewWindow() {
+  const groups = await Storage.getAllGroups();
+  const allUrls = [];
+  
+  groups.forEach(group => {
+    group.tabs.forEach(tab => {
+      if (tab.url && !tab.url.startsWith('chrome-extension://')) {
+        allUrls.push(tab.url);
+      }
+    });
+  });
+
+  if (allUrls.length === 0) {
+    alert('没有可打开的链接');
+    return;
+  }
+
+  // 创建新窗口并打开第一个链接
+  const window = await chrome.windows.create({
+    url: allUrls[0],
+    focused: true
+  });
+
+  // 在新窗口打开其余链接
+  for (let i = 1; i < allUrls.length; i++) {
+    await chrome.tabs.create({
+      url: allUrls[i],
+      windowId: window.id
+    });
+  }
+}
+
+// 在当前窗口打开单个链接
+async function openLinkInCurrentWindow(url) {
+  const currentWindow = await chrome.windows.getCurrent();
+  await chrome.tabs.create({
+    url: url,
+    windowId: currentWindow.id
+  });
+}
+
+// 在新窗口打开单个链接
+async function openLinkInNewWindow(url) {
+  await chrome.windows.create({
+    url: url,
+    focused: true
+  });
+}
+
+// 在当前窗口打开分组的所有链接
+async function openGroupLinksInCurrentWindow(groupId) {
+  const groups = await Storage.getAllGroups();
+  const group = groups.find(g => g._id === groupId);
+  
+  if (!group || !group.tabs || group.tabs.length === 0) {
+    return;
+  }
+
+  const urls = group.tabs
+    .filter(tab => tab.url && !tab.url.startsWith('chrome-extension://'))
+    .map(tab => tab.url);
+
+  if (urls.length === 0) {
+    return;
+  }
+
+  const currentWindow = await chrome.windows.getCurrent();
+  
+  for (const url of urls) {
+    await chrome.tabs.create({
+      url: url,
+      windowId: currentWindow.id
+    });
+  }
+}
+
+// 在新窗口打开分组的所有链接
+async function openGroupLinksInNewWindow(groupId) {
+  const groups = await Storage.getAllGroups();
+  const group = groups.find(g => g._id === groupId);
+  
+  if (!group || !group.tabs || group.tabs.length === 0) {
+    return;
+  }
+
+  const urls = group.tabs
+    .filter(tab => tab.url && !tab.url.startsWith('chrome-extension://'))
+    .map(tab => tab.url);
+
+  if (urls.length === 0) {
+    return;
+  }
+
+  // 创建新窗口并打开第一个链接
+  const window = await chrome.windows.create({
+    url: urls[0],
+    focused: true
+  });
+
+  // 在新窗口打开其余链接
+  for (let i = 1; i < urls.length; i++) {
+    await chrome.tabs.create({
+      url: urls[i],
+      windowId: window.id
+    });
+  }
+}
+
 // 创建分组元素
 function createGroupElement(group) {
   const groupDiv = document.createElement('div');
@@ -257,6 +396,10 @@ function createGroupElement(group) {
           `<span class="group-title-text">${group.title}</span>`
         }
         <span class="group-time">${timeStr}</span>
+        <div class="group-open-buttons">
+          <button class="btn btn-small open-group-current-window-btn" data-group-id="${group._id}">在当前窗口打开</button>
+          <button class="btn btn-small open-group-new-window-btn" data-group-id="${group._id}">在新窗口打开</button>
+        </div>
       </div>
       <div class="group-actions">
         <button class="btn btn-danger delete-group-btn">删除分组</button>
@@ -272,7 +415,8 @@ function createGroupElement(group) {
             <div class="tab-url">${escapeHtml(tab.url)}</div>
           </div>
           <div class="tab-actions">
-            <a href="${tab.url}" target="_blank" class="tab-link">打开</a>
+            <button class="btn btn-small open-current-window-btn" data-url="${escapeHtml(tab.url)}">在当前窗口打开</button>
+            <button class="btn btn-small open-new-window-btn" data-url="${escapeHtml(tab.url)}">在新窗口打开</button>
             <button class="btn btn-danger delete-tab-btn" style="padding: 2px 6px; font-size: 11px;">删除</button>
           </div>
         </div>
@@ -297,12 +441,33 @@ function createGroupElement(group) {
     if (e.target === titleInput || e.target.closest('.group-title-input')) {
       return;
     }
+    if (e.target.closest('.group-open-buttons') || e.target.closest('.open-group-current-window-btn') || e.target.closest('.open-group-new-window-btn')) {
+      return;
+    }
     
     group.expand = !group.expand;
     expandIcon.classList.toggle('expanded');
     tabsList.classList.toggle('hidden');
     await Storage.toggleGroupExpand(group._id);
   });
+
+  // 在当前窗口打开分组的所有链接
+  const openGroupCurrentWindowBtn = groupDiv.querySelector('.open-group-current-window-btn');
+  if (openGroupCurrentWindowBtn) {
+    openGroupCurrentWindowBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await openGroupLinksInCurrentWindow(group._id);
+    });
+  }
+
+  // 在新窗口打开分组的所有链接
+  const openGroupNewWindowBtn = groupDiv.querySelector('.open-group-new-window-btn');
+  if (openGroupNewWindowBtn) {
+    openGroupNewWindowBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await openGroupLinksInNewWindow(group._id);
+    });
+  }
 
   // 编辑标题
   if (titleText) {
@@ -365,6 +530,30 @@ function createGroupElement(group) {
       if (confirm('确定要删除这个标签吗？')) {
         await Storage.deleteTab(group._id, tabUuid);
         await loadGroups();
+      }
+    });
+  });
+
+  // 在当前窗口打开链接
+  const openCurrentWindowBtns = groupDiv.querySelectorAll('.open-current-window-btn');
+  openCurrentWindowBtns.forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const url = btn.dataset.url;
+      if (url && !url.startsWith('chrome-extension://')) {
+        await openLinkInCurrentWindow(url);
+      }
+    });
+  });
+
+  // 在新窗口打开链接
+  const openNewWindowBtns = groupDiv.querySelectorAll('.open-new-window-btn');
+  openNewWindowBtns.forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const url = btn.dataset.url;
+      if (url && !url.startsWith('chrome-extension://')) {
+        await openLinkInNewWindow(url);
       }
     });
   });

@@ -142,6 +142,13 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+}
+
+.group-open-buttons {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
 }
 
 .group-title input {
@@ -227,6 +234,40 @@ body {
 .tab-actions {
   display: flex;
   gap: 4px;
+  flex-wrap: wrap;
+}
+
+.btn-small {
+  padding: 4px 8px;
+  font-size: 11px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  background: #4285f4;
+  color: white;
+}
+
+.btn-small:hover {
+  background: #357ae8;
+}
+
+.open-current-window-btn {
+  background: #4285f4;
+  color: white;
+}
+
+.open-current-window-btn:hover {
+  background: #357ae8;
+}
+
+.open-new-window-btn {
+  background: #34a853;
+  color: white;
+}
+
+.open-new-window-btn:hover {
+  background: #2d8f47;
 }
 
 .tab-link {
